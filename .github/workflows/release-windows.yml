@@ -50,6 +50,29 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
+      - name: Read release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $version = (Get-Content 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
+          $lines = Get-Content 'CHANGELOG.md'
+          $section = @()
+          $found = $false
+          foreach ($line in $lines) {
+            if ($line -match '^##\s+') {
+              if ($found) { break }
+              if ($line -match ('^##\s+' + [regex]::Escape($version) + '\s*$')) { $found = $true; continue }
+            } elseif ($found) {
+              $section += $line
+            }
+          }
+          $body = (($section -join "`n").Trim())
+          if (-not $body) { $body = "Windows build of Acknowledge v$version." }
+          $body += "`n`nExisting installations can update from Settings → Desktop updates.`n`nThis build is not code-signed, so Windows SmartScreen may ask you to confirm before running it."
+          "body<<NOTES_EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $body | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "NOTES_EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
       - name: Build, sign and publish release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -59,12 +82,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: Acknowledge v__VERSION__
-          releaseBody: |
-            Windows build of Acknowledge.
-
-            Download the setup executable below for a first install. Existing installations can update from Settings → Desktop updates.
-
-            This build is not code-signed, so Windows SmartScreen may ask you to confirm before running it.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true

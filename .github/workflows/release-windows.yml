@@ -1,0 +1,65 @@
+name: Build Windows release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unpack Acknowledge source
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri 'https://acknowledge-q9yyk4-preview.freebuff.page/desktop/acknowledge-source.zip' -OutFile source.zip
+          Expand-Archive -Path source.zip -DestinationPath . -Force
+          Remove-Item source.zip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch the FFmpeg core
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          New-Item -ItemType Directory -Force -Path public/ffmpeg | Out-Null
+          $files = @{
+            'ffmpeg-core.js'   = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js'
+            'ffmpeg-core.wasm' = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm'
+            'worker.js'        = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js'
+            'const.js'         = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/const.js'
+            'errors.js'        = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/errors.js'
+          }
+          foreach ($name in $files.Keys) {
+            Invoke-WebRequest -Uri $files[$name] -OutFile (Join-Path 'public/ffmpeg' $name)
+          }
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Build installer and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Acknowledge v__VERSION__
+          releaseBody: |
+            Windows build of Acknowledge.
+
+            Download the setup executable below and run it. This build is not code-signed, so Windows SmartScreen may ask you to confirm before running it.
+          releaseDraft: false
+          prerelease: false

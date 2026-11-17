@@ -50,16 +50,21 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
-      - name: Build installer and publish release
+      - name: Build, sign and publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
           releaseName: Acknowledge v__VERSION__
           releaseBody: |
             Windows build of Acknowledge.
 
-            Download the setup executable below and run it. This build is not code-signed, so Windows SmartScreen may ask you to confirm before running it.
+            Download the setup executable below for a first install. Existing installations can update from Settings → Desktop updates.
+
+            This build is not code-signed, so Windows SmartScreen may ask you to confirm before running it.
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true
